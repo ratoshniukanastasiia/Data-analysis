@@ -1,1 +1,497 @@
+1. Застосування групування, умов та функцій агрегації. Розрахунок метрики маркетингових кампаній, таких як: CPC, CPM, CTR, ROMI
+SELECT
+	DISTINCT ad_date,
+	campaign_id,
+	sum(spend) AS "spend_for_ad",
+	sum(impressions) AS "total_impressions",
+	sum(clicks) AS "total_clics",
+	sum(value) AS "total_value",
+	sum(spend)/ sum(clicks) AS "CPC",
+	(sum(spend)/ sum(impressions::float))* 1000 AS "CPM",
+	(sum(clicks)/ sum(impressions::float))* 100 AS "CTR",
+	((sum(value) - sum(spend))/ sum(spend::float))* 100 AS "ROMI"
+FROM
+	public.facebook_ads_basic_daily
+WHERE
+	spend>0
+	AND impressions >0
+	AND clicks >0
+	AND value>0
+GROUP BY
+	ad_date,
+	campaign_id
+ORDER BY
+	ad_date ASC;
 
+2. Знаходження компанії з найвищим ROMI з загальною сумою витрат більше 500 000 в таблиці facebook_ads_basic_daily. Застосування функції having.
+SELECT
+	campaign_id,
+	sum(spend) AS total_spend,
+	sum(value) AS total_value,
+	((sum(value) - sum(spend))/ sum(spend::float))* 100 AS "ROMI"
+FROM
+	public.facebook_ads_basic_daily
+GROUP BY
+	campaign_id
+HAVING
+	sum(spend)>500000
+ORDER BY
+	campaign_id DESC
+LIMIT 1;
+
+3. Застосування операцій join та union, common table expressions (CTE). Застосування функцій: coalesce, nullif, cast а також групування, функції агрегації.
+WITH total_ad_campaign AS (
+SELECT
+	ad_date,
+	fc.campaign_name,
+	fa.adset_name,
+	spend,
+	impressions,
+	reach,
+	clicks,
+	leads,
+	value
+FROM
+	facebook_ads_basic_daily fabd
+LEFT JOIN facebook_campaign fc ON
+	fc.campaign_id = fabd.campaign_id
+LEFT JOIN facebook_adset fa ON
+	fa.adset_id = fabd.adset_id
+UNION ALL
+SELECT
+	ad_date,
+	campaign_name,
+	adset_name,
+	spend,
+	impressions,
+	reach,
+	clicks,
+	leads,
+	value
+FROM
+	google_ads_basic_daily gabd
+)
+SELECT
+	ad_date,
+	campaign_name AS fb_gl_campaign_name,
+	sum(spend) AS total_spend,
+	sum(impressions) AS total_impressions,
+	sum(clicks) AS total_clicks,
+	sum(value) AS total_value,
+	COALESCE (NULLIF(sum(spend),
+	0))/ COALESCE (NULLIF (sum(clicks),
+	0)) AS "CPC_total",
+	round (COALESCE (NULLIF (sum(spend),
+	0))/ COALESCE (NULLIF (sum(impressions::NUMERIC),
+	0))* 1000,
+	2) AS "CPM_total",
+	round(COALESCE (NULLIF (sum(clicks),
+	0))/ COALESCE (NULLIF (sum(impressions::NUMERIC),
+	0))* 100,
+	2) AS "CTR_total",
+	round(COALESCE (NULLIF((sum(value) - sum(spend)),
+	0))/ COALESCE (NULLIF (sum(spend::float),
+	0))* 100) AS "ROMI"
+FROM
+	total_ad_campaign
+GROUP BY
+	1,
+	2
+ORDER BY
+	1;
+Візуалізація за цим запитом в наступному посиланні: https://lookerstudio.google.com/u/0/reporting/a9694baf-f622-41a4-b1d6-e18a834a05f5/page/Y2DWD
+
+4. Визначення кампанії з найвищим ROMI серед усіх кампаній з загальною сумою витрат більше 500 000. Визначення групи оголошень з найвищим ROMI серед кампаній.
+Було застосовано: CTE, join, union all, round, coalesce, having.
+WITH total_ad_campaign AS (
+SELECT
+	ad_date,
+	fc.campaign_name,
+	fa.adset_name,
+	spend,
+	impressions,
+	reach,
+	clicks,
+	leads,
+	value
+FROM
+	facebook_ads_basic_daily fabd
+LEFT JOIN facebook_campaign fc ON
+	fc.campaign_id = fabd.campaign_id
+LEFT JOIN facebook_adset fa ON
+	fa.adset_id = fabd.adset_id
+UNION ALL
+SELECT
+	ad_date,
+	campaign_name,
+	adset_name,
+	spend,
+	impressions,
+	reach,
+	clicks,
+	leads,
+	value
+FROM
+	google_ads_basic_daily gabd
+)
+SELECT
+	campaign_name AS fb_gl_campaign_name,
+	adset_name,
+	round(COALESCE (NULLIF((sum(value) - sum(spend)),
+	0))/ COALESCE (NULLIF (sum(spend::float),
+	0))* 100) AS "ROMI_total"
+FROM
+	total_ad_campaign
+GROUP BY
+	1,
+	2
+HAVING
+	sum(spend)>500000
+ORDER BY
+	3 DESC
+LIMIT 1;
+
+5. Застосування операторів для роботи з рядками (lower, substring). Використання умовних операторів (case when then else) та операторів для роботи з відсутніми значеннями (null).
+Використано: CTE, left join, union all, coalesce, case when then else, lower, substring, cast, функції агрегації.
+WITH total_ad_campaign AS (
+SELECT
+	ad_date,
+	url_parameters,
+	fc.campaign_name,
+	fa.adset_name,
+	COALESCE (spend,
+	0)AS spend,
+	COALESCE (impressions,
+	0) AS impressions,
+	COALESCE (reach,
+	0) AS reach,
+	COALESCE (clicks,
+	0) AS clicks,
+	COALESCE (leads,
+	0) AS leads,
+	COALESCE (value,
+	0) AS value
+FROM
+	facebook_ads_basic_daily fabd
+LEFT JOIN facebook_campaign fc ON
+	fc.campaign_id = fabd.campaign_id
+LEFT JOIN facebook_adset fa ON
+	fa.adset_id = fabd.adset_id
+UNION ALL
+SELECT
+	ad_date,
+	url_parameters,
+	campaign_name,
+	adset_name,
+	COALESCE (spend,
+	0)AS spend,
+	COALESCE (impressions,
+	0) AS impressions,
+	COALESCE (reach,
+	0) AS reach,
+	COALESCE (clicks,
+	0) AS clicks,
+	COALESCE (leads,
+	0) AS leads,
+	COALESCE (value,
+	0) AS value
+FROM
+	google_ads_basic_daily gabd
+)
+SELECT
+	ad_date,
+	CASE
+		WHEN lower(substring(url_parameters FROM 'utm_campaign=([^\&]+)')) = 'nan' THEN NULL
+		ELSE lower(substring(url_parameters FROM 'utm_campaign=([^\&]+)'))
+	END AS utm_campaign,
+	sum(spend::float)/ 100 AS total_spend,
+	sum(impressions) AS total_impressions,
+	sum(clicks) AS total_clicks,
+	sum(value) AS total_value,
+	CASE
+		WHEN sum (clicks)>0 THEN sum(spend)/ sum(clicks)
+		ELSE 0
+	END AS CPC,
+	CASE
+		WHEN sum (impressions)>0 THEN round(((sum(spend)/ sum(impressions::NUMERIC))* 1000),
+		2)
+		ELSE 0
+	END AS CPM,
+	CASE
+		WHEN sum (impressions)>0 THEN round((sum(clicks)/ sum(impressions::NUMERIC)* 100),
+		2)
+		ELSE 0
+	END AS CTR,
+	CASE
+		WHEN sum (spend)>0 THEN round ((((sum(value)-sum(spend))/ sum(spend::NUMERIC))* 100),
+		2)
+		ELSE 0
+	END AS ROMI
+FROM
+	total_ad_campaign
+GROUP BY
+	1,
+	2
+ORDER BY
+	1;
+
+6. Декодування значення utm_campaign за допомогою створення тимчасової функції.
+CREATE OR REPLACE FUNCTION decode_url_part ()
+RETURNS TEXT AS $function$
+BEGIN
+	CASE
+		WHEN lower (substring(url_parameters FROM '.*utm_campaign=([^\&]+)')) !='nan'
+		THEN RETURN lower (substring(url_parameters FROM '.*utm_campaign=([^\&]+)'));
+END;
+$function$
+LANGUAGE plpgsql;
+
+WITH total_ad_campaign AS (
+SELECT
+	ad_date,
+	url_parameters,
+	fc.campaign_name,
+	fa.adset_name,
+	COALESCE (spend,
+	0)AS spend,
+	COALESCE (impressions,
+	0) AS impressions,
+	COALESCE (reach,
+	0) AS reach,
+	COALESCE (clicks,
+	0) AS clicks,
+	COALESCE (leads,
+	0) AS leads,
+	COALESCE (value,
+	0) AS value
+FROM
+	facebook_ads_basic_daily fabd
+LEFT JOIN facebook_campaign fc ON
+	fc.campaign_id = fabd.campaign_id
+LEFT JOIN facebook_adset fa ON
+	fa.adset_id = fabd.adset_id
+UNION ALL
+SELECT
+	ad_date,
+	url_parameters,
+	campaign_name,
+	adset_name,
+	COALESCE (spend,
+	0)AS spend,
+	COALESCE (impressions,
+	0) AS impressions,
+	COALESCE (reach,
+	0) AS reach,
+	COALESCE (clicks,
+	0) AS clicks,
+	COALESCE (leads,
+	0) AS leads,
+	COALESCE (value,
+	0) AS value
+FROM
+	google_ads_basic_daily gabd
+)
+SELECT
+	ad_date,
+	CASE
+		WHEN lower(substring(url_parameters, 'utm_campaign=([^\&]+)')) != 'nan'
+	THEN decode_url_part(lower(substring(url_parameters, 'utm_campaign=([^\&]+)')))
+	END AS utm_campaign,
+	sum(spend::float)/ 100 AS total_spend,
+	sum(impressions) AS total_impressions,
+	sum(clicks) AS total_clicks,
+	sum(value) AS total_value,
+	CASE
+		WHEN sum (clicks)>0 THEN sum(spend)/ sum(clicks)
+		ELSE 0
+	END AS CPC,
+	CASE
+		WHEN sum (impressions)>0 THEN round(((sum(spend)/ sum(impressions::NUMERIC))* 1000),
+		2)
+		ELSE 0
+	END AS CPM,
+	CASE
+		WHEN sum (impressions)>0 THEN round((sum(clicks)/ sum(impressions::NUMERIC)* 100),
+		2)
+		ELSE 0
+	END AS CTR,
+	CASE
+		WHEN sum (spend)>0 THEN round ((((sum(value)-sum(spend))/ sum(spend::NUMERIC))* 100),
+		2)
+		ELSE 0
+	END AS ROMI
+FROM
+	total_ad_campaign
+GROUP BY
+	1,
+	2
+ORDER BY
+	1;
+
+7. Застосування функцій для роботи з датами: date_trunc; віконні функції: LAG.
+WITH total_ad_campaign AS (
+SELECT
+	ad_date, 
+		url_parameters,
+		COALESCE (spend,
+	0)AS spend,
+		COALESCE (impressions,
+	0) AS impressions,
+		COALESCE (reach,
+	0) AS reach,
+		COALESCE (clicks,
+	0) AS clicks,
+		COALESCE (leads,
+	0) AS leads,
+		COALESCE (value,
+	0) AS value
+FROM
+	facebook_ads_basic_daily fabd
+LEFT JOIN facebook_campaign fc ON
+	fc.campaign_id = fabd.campaign_id
+LEFT JOIN facebook_adset fa ON
+	fa.adset_id = fabd.adset_id
+UNION ALL
+SELECT
+	ad_date,
+		url_parameters,
+		COALESCE (spend,
+	0)AS spend,
+		COALESCE (impressions,
+	0) AS impressions,
+		COALESCE (reach,
+	0) AS reach,
+		COALESCE (clicks,
+	0) AS clicks,
+		COALESCE (leads,
+	0) AS leads,
+		COALESCE (value,
+	0) AS value
+FROM
+	google_ads_basic_daily gabd
+),
+total_ad_campaign_month_starting AS (
+SELECT
+	date_trunc('month',
+	ad_date) AS ad_month,
+	CASE
+		WHEN lower (substring(url_parameters
+	FROM
+		'utm_campaign=([^\&]+)')) = 'nan'
+			THEN NULL
+		WHEN lower (substring(url_parameters
+	FROM
+		'utm_campaign=([^\&]+)')) = '%d0%b1%d1%80%d0%b5%d0%bd%d0%b4'
+			THEN 'бренд'
+		WHEN lower (substring(url_parameters
+	FROM
+		'utm_campaign=([^\&]+)')) = '%d1%82%d1%80%d0%b5%d0%bd%d0%b4'
+			THEN 'тренд'
+		ELSE lower (substring(url_parameters
+	FROM
+		'utm_campaign=([^\&]+)'))
+	END AS utm_campaign,
+		sum(spend::float)/ 100 AS total_spend,
+		sum(impressions) AS total_impressions,
+		sum(clicks) AS total_clicks,
+		sum(value) AS total_value,
+	CASE
+		WHEN sum (clicks)>0
+			THEN sum(spend)/ sum(clicks)
+		ELSE 0
+	END AS CPC,
+	CASE
+		WHEN sum (impressions)>0
+			THEN round(((sum(spend)/ sum(impressions::NUMERIC))* 1000),
+		2)
+		ELSE 0
+	END AS CPM,
+	CASE
+		WHEN sum (impressions)>0
+			THEN round((sum(clicks)/ sum(impressions::NUMERIC)* 100),
+		2)
+		ELSE 0
+	END AS CTR,
+	CASE
+		WHEN sum (spend)>0
+			THEN round ((((sum(value)-sum(spend))/ sum(spend::NUMERIC))* 100),
+		2)
+		ELSE 0
+	END AS ROMI
+FROM
+	total_ad_campaign
+GROUP BY
+	1,
+	2
+ORDER BY
+	1
+)
+SELECT
+	ad_month,
+		utm_campaign,
+		total_spend,
+		total_impressions,
+		total_clicks,
+		total_value,
+		CTR,
+		CPC,
+		CPM,
+		ROMI,
+		LAG (cpm,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		) AS prev_month_cpm,
+		round (((cpm-LAG (cpm,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		))/ LAG (cpm,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		))* 100,
+	2) AS diff_cur_prev_cpm,
+		LAG (ctr,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		) AS prev_month_ctr,
+		round (((ctr-LAG (ctr,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		))/ LAG (ctr,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		))* 100,
+	2) AS diff_cur_prev_ctr,
+		LAG (romi,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		) AS prev_month_romi,
+		round(((romi-LAG (romi,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		))/ LAG (romi,
+	1) OVER (
+			PARTITION BY utm_campaign
+ORDER BY
+	ad_month
+		))* 100,
+	2) AS diff_cur_prev_romi
+FROM
+	total_ad_campaign_month_starting
+WHERE
+	total_spend>0;
