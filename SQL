@@ -1,4 +1,5 @@
-1. Застосування групування, умов та функцій агрегації. Розрахунок метрики маркетингових кампаній, таких як: CPC, CPM, CTR, ROMI
+1. Застосування групування, умов та функцій агрегації. Розрахунок метрики маркетингових кампаній, таких як: CPC, CPM, CTR, ROMI.
+(Applying of grouping, conditions and aggregation functions. Calculation of marketing campaign metrics such as CPC, CPM, CTR, ROMI)
 SELECT
 	DISTINCT ad_date,
 	campaign_id,
@@ -24,6 +25,7 @@ ORDER BY
 	ad_date ASC;
 
 2. Знаходження компанії з найвищим ROMI з загальною сумою витрат більше 500 000 в таблиці facebook_ads_basic_daily. Застосування функції having.
+(Finding the company with the highest ROMI with a total spend greater than 500 000 in the facebook_ads_basic_daily table. Using the having function.)
 SELECT
 	campaign_id,
 	sum(spend) AS total_spend,
@@ -40,6 +42,7 @@ ORDER BY
 LIMIT 1;
 
 3. Застосування операцій join та union, common table expressions (CTE). Застосування функцій: coalesce, nullif, cast а також групування, функції агрегації.
+(Applying of join and union operations, common table expressions (CTE). Applying of functions: coalesce, nullif, cast, grouping, aggregation functions)
 WITH total_ad_campaign AS (
 SELECT
 	ad_date,
@@ -100,9 +103,12 @@ GROUP BY
 ORDER BY
 	1;
 Візуалізація за цим запитом в наступному посиланні: https://lookerstudio.google.com/u/0/reporting/a9694baf-f622-41a4-b1d6-e18a834a05f5/page/Y2DWD
+(Visualization for this request in the link above.)
 
 4. Визначення кампанії з найвищим ROMI серед усіх кампаній з загальною сумою витрат більше 500 000. Визначення групи оголошень з найвищим ROMI серед кампаній.
 Було застосовано: CTE, join, union all, round, coalesce, having.
+(Identifying the campaign with the highest ROMI among all campaigns with a total spend greater than 500 000. Identifying the ad group with the highest ROMI among campaigns.
+Here were applied: CTE, join, union all, round, coalesce, having.)
 WITH total_ad_campaign AS (
 SELECT
 	ad_date,
@@ -153,6 +159,8 @@ LIMIT 1;
 
 5. Застосування операторів для роботи з рядками (lower, substring). Використання умовних операторів (case when then else) та операторів для роботи з відсутніми значеннями (null).
 Використано: CTE, left join, union all, coalesce, case when then else, lower, substring, cast, функції агрегації.
+(Applying of operators for working with strings (lower, substring). Using conditional operators (case when then else) and operators for working with missing values ​​(null).
+Used: CTE, left join, union all, coalesce, case when then else, lower, substring, cast, aggregation functions.)
 WITH total_ad_campaign AS (
 SELECT
 	ad_date,
@@ -236,6 +244,7 @@ ORDER BY
 	1;
 
 6. Декодування значення utm_campaign за допомогою створення тимчасової функції.
+(Decoding the utm_campaign value by creating a temporary function.)
 CREATE OR REPLACE FUNCTION decode_url_part ()
 RETURNS TEXT AS $function$
 BEGIN
@@ -329,6 +338,7 @@ ORDER BY
 	1;
 
 7. Застосування функцій для роботи з датами: date_trunc; віконні функції: LAG.
+(Applying of functions for working with dates: date_trunc; window functions: LAG.)
 WITH total_ad_campaign AS (
 SELECT
 	ad_date, 
